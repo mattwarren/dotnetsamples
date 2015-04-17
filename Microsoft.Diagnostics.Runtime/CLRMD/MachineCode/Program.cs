@@ -44,6 +44,7 @@ namespace MachineCode
                     ClrRuntime runtime = dt.CreateRuntime(dt.ClrVersions.Single().TryDownloadDac());
                     ClrHeap heap = runtime.GetHeap();
 
+                    PrintDiagnosticInfo(dt, runtime, heap);
                     Console.WriteLine();
 
                     // Note heap.GetTypeByName doesn't always get you the type, even if it exists, due to
@@ -114,6 +115,36 @@ namespace MachineCode
                 Console.WriteLine("Unhandled exception:");
                 Console.WriteLine(ex);
             }
+        }
+
+        private static void PrintDiagnosticInfo(DataTarget dt, ClrRuntime runtime, ClrHeap heap)
+        {
+            Console.WriteLine("DataTarget Info:");
+            Console.WriteLine("  ClrVersions: " + String.Join(", ", dt.ClrVersions));
+            Console.WriteLine("  IsMinidump: " + dt.IsMinidump);
+            Console.WriteLine("  Architecture: " + dt.Architecture);
+            Console.WriteLine("  PointerSize: " + dt.PointerSize);
+            Console.WriteLine("  SymbolPath: " + dt.GetSymbolPath());
+
+            Console.WriteLine("ClrRuntime Info:");
+            Console.WriteLine("  ServerGC: " + runtime.ServerGC);
+            Console.WriteLine("  HeapCount: " + runtime.HeapCount);
+            Console.WriteLine("  Thread Count: " + runtime.Threads.Count);
+
+            Console.WriteLine("ClrRuntime Modules:");
+            foreach (var module in runtime.EnumerateModules())
+            {
+                Console.WriteLine("  {0,26} Id:{1}, {2,10:N0} bytes @ 0x{3:X8}",
+                                  Path.GetFileName(module.FileName), module.AssemblyId, module.Size, module.ImageBase);
+            }
+
+            Console.WriteLine("ClrHeap Info:");
+            Console.WriteLine("  TotalHeapSize: " + heap.TotalHeapSize);
+            Console.WriteLine("  Segments: " + heap.Segments.Count);
+            Console.WriteLine("  Gen0 Size: " + heap.GetSizeByGen(0));
+            Console.WriteLine("  Gen1 Size: " + heap.GetSizeByGen(1));
+            Console.WriteLine("  Gen2 Size: " + heap.GetSizeByGen(2));
+            Console.WriteLine("  Gen3 Size: " + heap.GetSizeByGen(3));
         }
 
         // From http://stackoverflow.com/questions/139593/processstartinfo-hanging-on-waitforexit-why/7608823#7608823
