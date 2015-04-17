@@ -41,7 +41,15 @@ namespace MachineCode
                 using (DataTarget dt = DataTarget.LoadCrashDump(dump))
                 {
                     // Boilerplate.
-                    ClrRuntime runtime = dt.CreateRuntime(dt.ClrVersions.Single().TryDownloadDac());
+                    //ClrRuntime runtime = dt.CreateRuntime(dt.ClrVersions.Single().TryDownloadDac());
+                    var version = dt.ClrVersions.Single();
+                    //{v4.0.30319.18444}
+                    //version.Version = new VersionInfo { Major = 4, Minor = 0, Patch = 30319, Revision = 18444 };
+                    Console.WriteLine("CLR Version: {0} ({1}), Dac: {2}", version.Version, version.Flavor, version.DacInfo);
+                    var dacFileName = version.TryDownloadDac();
+                    Console.WriteLine("DacFile: " + Path.GetFileName(dacFileName));
+                    Console.WriteLine("DacFile: " + Path.GetDirectoryName(dacFileName));
+                    ClrRuntime runtime = dt.CreateRuntime(dacFileName);
                     ClrHeap heap = runtime.GetHeap();
 
                     PrintDiagnosticInfo(dt, runtime, heap);
@@ -51,12 +59,12 @@ namespace MachineCode
                     // limitations in the dac private apis that ClrMD is written on.  If you have the ClrType
                     // already via other means (heap walking, stack walking, etc), then that's better than
                     // using GetTypeByName:
-                    var classNameWithNamespace = "JITterOptimisations.Program"; // "System.Object";
+                    var classNameWithNamespace = "JITterOptimisations.Program";
                     ClrType @class = heap.GetTypeByName(classNameWithNamespace);
 
                     // Get the method you are looking for.
-                    var methodName = "Sqrt";
-                    ClrMethod @method = @class.Methods.Single(m => m.Name == methodName);
+                    var signature = "JITterOptimisations.Program.Log(System.ConsoleColor, System.String)";
+                    ClrMethod @method = @class.Methods.Single(m => m.GetFullSignature() == signature);
 
                     // Find out whether the method was JIT'ed or NGEN'ed (if you care):
                     MethodCompilationType compileType = @method.CompilationType;
@@ -71,6 +79,12 @@ namespace MachineCode
                     // You are supposed to do code flow analysis like "uf" in windbg to find the size, but
                     // in practice you can use the IL to native mapping:
                     ulong endAddress = @method.ILOffsetMap.Select(entry => entry.EndAddress).Max();
+
+                    var lines =
+                        File.ReadAllLines(
+                            @"C:\Users\warma11\Documents\Visual Studio 2013\Projects\JITterOptimisations\JITterOptimisations\Program.cs");
+
+                    PrintILToNativeOffsets(method, startAddress, lines);
 
                     // This is what we expect it to be
                     //--- c:\Users\warma11\Documents\Visual Studio 2013\Projects\JITterOptimisations\JITterOptimisations\Program.cs 
@@ -117,6 +131,62 @@ namespace MachineCode
             }
         }
 
+        private static void PrintILToNativeOffsets(ClrMethod method, ulong startAddress, string[] lines)
+        {
+            Console.WriteLine("IL -> Native Offsets:");
+            Console.WriteLine("\t" + String.Join("\n\t", @method.ILOffsetMap));
+            foreach (ILToNativeMap il in @method.ILOffsetMap)
+            {
+                SourceLocation sourceLocation = null;
+                try
+                {
+                    Console.WriteLine(
+                        "\nPrintILToNativeOffsets, il.Offset: {0,10} ({1,3:N0}), il.StartAddress: {2} ({2,8:X8})",
+                        "0x" + il.ILOffset.ToString("X2"), il.ILOffset, il.StartAddress);
+                    if (il.ILOffset < 0) // FFFF FFFX is 4,294,967,280
+                        continue;
+                    sourceLocation = @method.GetSourceLocationForOffset(il.StartAddress);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    continue;
+                }
+
+                var sourceInfo = "<UNKNOWN>";
+                if (sourceLocation != null)
+                {
+                    if (sourceLocation.LineNumber == sourceLocation.LineNumberEnd)
+                    {
+                        sourceInfo = String.Format("{0}:{1} (Columns {2}->{3})",
+                                                   Path.GetFileName(sourceLocation.FilePath),
+                                                   sourceLocation.LineNumber, sourceLocation.ColStart,
+                                                   sourceLocation.ColEnd);
+                    }
+                    else
+                    {
+                        sourceInfo = String.Format("{0}: {1}->{2} ({3}->{4})",
+                                                   Path.GetFileName(sourceLocation.FilePath),
+                                                   sourceLocation.LineNumber, sourceLocation.LineNumberEnd,
+                                                   sourceLocation.ColStart, sourceLocation.ColEnd);
+                    }
+                }
+
+                Console.WriteLine("{0,10} ({1,3:N0}) - [{2:X8}-{3:X8} ({4:X8}-{5:X8})] {6}",
+                                  "0x" + il.ILOffset.ToString("X2"), il.ILOffset,
+                                  il.StartAddress - startAddress, il.EndAddress - startAddress,
+                                  il.StartAddress, il.EndAddress, sourceInfo);
+                if (sourceLocation != null && il.ILOffset >= 0) // FFFF FFFX (-ve) appear to be special cases
+                {
+                    var indent = 7;
+                    Console.WriteLine("{0,6}:{1}", sourceLocation.LineNumber, lines[sourceLocation.LineNumber - 1]);
+                    Console.WriteLine(new string(' ', sourceLocation.ColStart - 1 + indent) +
+                                      new string('*', sourceLocation.ColEnd - sourceLocation.ColStart));
+                }
+                //Console.WriteLine();
+            }
+        }
+
         private static void PrintDiagnosticInfo(DataTarget dt, ClrRuntime runtime, ClrHeap heap)
         {
             Console.WriteLine("DataTarget Info:");
@@ -150,15 +220,6 @@ namespace MachineCode
         // From http://stackoverflow.com/questions/139593/processstartinfo-hanging-on-waitforexit-why/7608823#7608823
         private static string GetDisassembly(string filename, string arguments, int timeoutMsecs)
         {
-            //using (Process exeProcess = Process.Start(startInfo))
-            //{
-            //    var processCompleted = exeProcess.WaitForExit(100);
-            //    if (processCompleted == false)
-            //        Console.WriteLine("Process did NOT complete in time!!");
-            //    Console.WriteLine(exeProcess.StandardOutput.ReadToEnd());
-            //    Console.WriteLine(exeProcess.StandardError.ReadToEnd());
-            //}
-
             using (Process process = new Process())
             {
                 process.StartInfo.FileName = filename;
