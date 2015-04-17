@@ -1,9 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Text;
-using System.Threading;
 using Microsoft.Diagnostics.Runtime;
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -48,7 +45,7 @@ namespace MachineCode
                     Console.WriteLine("CLR Version: {0} ({1}), Dac: {2}", version.Version, version.Flavor, version.DacInfo);
                     var dacFileName = version.TryDownloadDac();
                     Console.WriteLine("DacFile: " + Path.GetFileName(dacFileName));
-                    Console.WriteLine("DacFile: " + Path.GetDirectoryName(dacFileName));
+                    Console.WriteLine("DacPath: " + Path.GetDirectoryName(dacFileName));
                     ClrRuntime runtime = dt.CreateRuntime(dacFileName);
                     ClrHeap heap = runtime.GetHeap();
 
@@ -65,10 +62,6 @@ namespace MachineCode
                     // Get the method you are looking for.
                     var signature = "JITterOptimisations.Program.Log(System.ConsoleColor, System.String)";
                     ClrMethod @method = @class.Methods.Single(m => m.GetFullSignature() == signature);
-
-                    // Find out whether the method was JIT'ed or NGEN'ed (if you care):
-                    MethodCompilationType compileType = @method.CompilationType;
-                    Console.WriteLine("{0} was JIT'ed by {1}", @method.ToString(), compileType);
 
                     // This is the first instruction of the JIT'ed (or NGEN'ed) machine code.
                     ulong startAddress = @method.NativeCode;
@@ -89,42 +82,29 @@ namespace MachineCode
                     // This doesn't seem to work as expected, using alternative method (above)
                     //PrintILToNativeOffsets(method, startAddress, lines);
 
-                    // This is what we expect it to be
-                    //--- c:\Users\warma11\Documents\Visual Studio 2013\Projects\JITterOptimisations\JITterOptimisations\Program.cs 
-                    //    45:             return Math.Sqrt(value);
-                    //00000000 55                   push        ebp 
-                    //00000001 8B EC                mov         ebp,esp 
-                    //00000003 DD 45 08             fld         qword ptr [ebp+8] 
-                    //00000006 D9 FA                fsqrt 
-                    //00000008 5D                   pop         ebp 
-                    //00000009 C2 08 00             ret         8 
-
                     // So the assembly code for the function is is in the range [startAddress, endAddress] inclusive.
                     var count = (int)endAddress + runtime.PointerSize - (int)startAddress;
                     Console.WriteLine("\nCode startAddress 0x{0:X} -> endAddress 0x{1:X} (inclusive), will read {2} bytes", startAddress, endAddress, count);
 
-                    byte[] bytes = new byte[count];
+                    var bytes = new byte[count];
                     int bytesRead;
                     runtime.ReadMemory(startAddress, bytes, count, out bytesRead);
                     if (count != bytesRead)
-                        Console.WriteLine("Expected to read {0} bytes, but only read {1}", count, bytesRead);
+                        Console.WriteLine("Expected to read {0} bytes, but only read {1}\n", count, bytesRead);
                     else
-                        Console.WriteLine("Read read {0} bytes, as expected", bytesRead);
+                        Console.WriteLine("Read read {0} bytes, as expected\n", bytesRead);
                     var fileName = string.Format("result-{0}bit.bin", runtime.PointerSize == 8 ? 64 : 32);
                     if (File.Exists(fileName))
                         File.Delete(fileName);
                     File.WriteAllBytes(fileName, bytes);
 
-                    Console.WriteLine();
-
                     var filename =
                         @"C:\Users\warma11\Downloads\__GitHub__\dotnetsamples\Microsoft.Diagnostics.Runtime\CLRMD\MachineCode\nasm-2.11.05-win32\ndisasm.exe";
                     var currentFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
                     var arguments = "-b32 " + Path.Combine(currentFolder, fileName); // +" -o " + startAddress;
-                    var disassembly = GetDisassembly(filename, arguments, timeoutMsecs: 250);
-                    //Console.WriteLine(disassembly);
+                    var disassembly = Disassembler.GetDisassembly(filename, arguments, timeoutMsecs: 250);
 
-                    var assemblyData = ProcessDisassembly(disassembly);
+                    var assemblyData = Disassembler.ProcessDisassembly(disassembly);
                 }
             }
             catch (Exception ex)
@@ -134,7 +114,7 @@ namespace MachineCode
             }
         }
 
-        private static void PrintILToNativeOffsetAlternative(ClrMethod method, string[] lines)
+        private static void PrintILToNativeOffsetAlternative(ClrMethod method, IList<string> lines)
         {
             DesktopModule module = (DesktopModule) @method.Type.Module;
             if (!module.IsPdbLoaded)
@@ -168,7 +148,7 @@ namespace MachineCode
             Console.WriteLine();
         }
 
-        private static void PrintILToNativeOffsets(ClrMethod method, ulong startAddress, string[] lines)
+        private static void PrintILToNativeOffsets(ClrMethod method, ulong startAddress, IList<string> lines)
         {
             Console.WriteLine("IL -> Native Offsets:");
             Console.WriteLine("\t" + String.Join("\n\t", @method.ILOffsetMap));
@@ -213,14 +193,13 @@ namespace MachineCode
                                   "0x" + il.ILOffset.ToString("X2"), il.ILOffset,
                                   il.StartAddress - startAddress, il.EndAddress - startAddress,
                                   il.StartAddress, il.EndAddress, sourceInfo);
-                if (sourceLocation != null && il.ILOffset >= 0) // FFFF FFFX (-ve) appear to be special cases
+                if (sourceLocation != null && il.ILOffset >= 0)
                 {
                     var indent = 7;
                     Console.WriteLine("{0,6}:{1}", sourceLocation.LineNumber, lines[sourceLocation.LineNumber - 1]);
                     Console.WriteLine(new string(' ', sourceLocation.ColStart - 1 + indent) +
                                       new string('*', sourceLocation.ColEnd - sourceLocation.ColStart));
                 }
-                //Console.WriteLine();
             }
         }
 
@@ -252,123 +231,6 @@ namespace MachineCode
             Console.WriteLine("  Gen1 Size: " + heap.GetSizeByGen(1));
             Console.WriteLine("  Gen2 Size: " + heap.GetSizeByGen(2));
             Console.WriteLine("  Gen3 Size: " + heap.GetSizeByGen(3));
-        }
-
-        // From http://stackoverflow.com/questions/139593/processstartinfo-hanging-on-waitforexit-why/7608823#7608823
-        private static string GetDisassembly(string filename, string arguments, int timeoutMsecs)
-        {
-            using (Process process = new Process())
-            {
-                process.StartInfo.FileName = filename;
-                process.StartInfo.Arguments = arguments;
-                process.StartInfo.UseShellExecute = false;
-                process.StartInfo.RedirectStandardOutput = true;
-                process.StartInfo.RedirectStandardError = true;
-
-                StringBuilder output = new StringBuilder();
-                StringBuilder error = new StringBuilder();
-
-                using (AutoResetEvent outputWaitHandle = new AutoResetEvent(false))
-                using (AutoResetEvent errorWaitHandle = new AutoResetEvent(false))
-                {
-                    process.OutputDataReceived += (sender, e) =>
-                    {
-                        if (e.Data == null)
-                        {
-                            if (outputWaitHandle != null) outputWaitHandle.Set();
-                        }
-                        else
-                        {
-                            output.AppendLine(e.Data);
-                        }
-                    };
-                    process.ErrorDataReceived += (sender, e) =>
-                    {
-                        if (e.Data == null)
-                        {
-                            if (errorWaitHandle != null) errorWaitHandle.Set();
-                        }
-                        else
-                        {
-                            error.AppendLine(e.Data);
-                        }
-                    };
-
-                    process.Start();
-
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-
-                    if (process.WaitForExit(timeoutMsecs) &&
-                        outputWaitHandle.WaitOne(timeoutMsecs) &&
-                        errorWaitHandle.WaitOne(timeoutMsecs))
-                    {
-                        // Process completed. Check process.ExitCode here.
-                    }
-                    else
-                    {
-                        // Timed out.
-                        Console.WriteLine("TIMED OUT!!");
-                    }
-                }
-                if (error.Length > 0)
-                    Console.WriteLine(error.ToString());
-
-                return output.ToString();
-            }
-        }
-
-        private static List<AssemblyLine> ProcessDisassembly(string disassembly)
-        {
-            var assemblyData = new List<AssemblyLine>();
-            var disassemblyLines = disassembly.Split(new[] { Environment.NewLine }, StringSplitOptions.RemoveEmptyEntries);
-            foreach (var line in disassemblyLines)
-            {
-                var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-                if (parts.Length < 3)
-                {
-                    Console.WriteLine("Unexpected line: " + line);
-                    continue;
-                }
-
-                var address = Convert.ToUInt32(parts[0], 16);
-                var rawData = parts[1];
-                var textStart = line.IndexOf(parts[2]);
-                var text = line.Substring(textStart);
-
-                // Test our error checking!!!
-                //if (rawData == "53")
-                //    text = "push blah";
-
-                var newData = new AssemblyLine { Address = address, RawData = rawData, Text = text };
-                Console.WriteLine(newData);
-                assemblyData.Add(newData);
-            }
-
-            int lineNum = 0;
-            foreach (var line in disassemblyLines)
-            {
-                var other = assemblyData[lineNum];
-                if (other.ToString() != line)
-                    Console.WriteLine("Error on line {0}\nExpected:{1}\n     Got:{2}", lineNum, line, other.ToString());
-                lineNum++;
-            }
-            return assemblyData;
-        }
-
-        private class AssemblyLine
-        {
-            public uint Address { get; set; }
-            public string RawData { get; set; }
-            public string Text { get; set; }
-
-            public override string ToString()
-            {
-                //00000000  55                push ebp
-                //00000001  8BEC              mov ebp,esp
-                //0000000A  E879BBFA70        call dword 0x70fabb88
-                return String.Format("{0:X8}  {1}{2}", Address, RawData.PadRight(18), Text);
-            }
         }
 
         public static bool TryParseArgs(string[] args, out string dump, out string dac)
