@@ -197,7 +197,8 @@ namespace Microsoft.Diagnostics.Runtime
             }
             else if (major == 4)
             {
-                if (patch < 10000)
+                // Allow support for .NET 4.5 runtimes
+                if (minor == 0 && patch < 10000)
                     ver = DesktopVersion.v4;
                 else
                     return new V45Runtime(this, lib);
