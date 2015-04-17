@@ -1,8 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.30501.0
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DumpHeap", "DumpHeap\DumpHeap.csproj", "{0F51A2D8-C546-4DFF-A5E8-0BF2F654098D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MemStats", "MemStats\MemStats.csproj", "{A9D26960-E548-474C-9E43-FF30277A2F6E}"
@@ -20,6 +18,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClrMemDiag", "ClrMemDiag\ClrMemDiag.csproj", "{A82126CA-23AA-41F1-8586-A5938D44D0A7}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClrMemDiagExt", "ClrMemDiagExt\ClrMemDiagExt.csproj", "{249A0236-8FC8-4CD7-B6E1-C3422924EA09}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MachineCode", "MachineCode\MachineCode.csproj", "{D723D8E8-509D-4E55-B995-EA9F63968470}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -121,6 +121,16 @@ Global
 		{249A0236-8FC8-4CD7-B6E1-C3422924EA09}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
 		{249A0236-8FC8-4CD7-B6E1-C3422924EA09}.Release|Mixed Platforms.Build.0 = Release|Any CPU
 		{249A0236-8FC8-4CD7-B6E1-C3422924EA09}.Release|x86.ActiveCfg = Release|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{D723D8E8-509D-4E55-B995-EA9F63968470}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
