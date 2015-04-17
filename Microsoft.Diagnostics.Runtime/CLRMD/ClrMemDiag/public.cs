@@ -1539,6 +1539,24 @@ namespace Microsoft.Diagnostics.Runtime
     }
 
     /// <summary>
+    /// Contains the mapping of IL Offset -> Source Location
+    /// </summary>
+    public class ILOffsetSourceLocation
+    {
+        private readonly uint ilOffset;
+        public uint ILOffset { get { return ilOffset; } }
+
+        private readonly SourceLocation sourceLocation;
+        public SourceLocation SourceLocation { get { return sourceLocation; } }
+
+        internal ILOffsetSourceLocation(uint ilOffset, SourceLocation sourceLocation)
+        {
+            this.ilOffset = ilOffset;
+            this.sourceLocation = sourceLocation;
+        }
+    }
+
+    /// <summary>
     /// Defines the state of the thread from the runtime's perspective.
     /// </summary>
     public enum GcMode
@@ -2841,7 +2859,9 @@ namespace Microsoft.Diagnostics.Runtime
             get
             {
                 if (m_symbolReader == null)
+                {
                     m_symbolReader = new SymbolReader(TextWriter.Null, m_symPath);
+                }
 
                 return m_symbolReader;
             }

@@ -84,7 +84,10 @@ namespace MachineCode
                         File.ReadAllLines(
                             @"C:\Users\warma11\Documents\Visual Studio 2013\Projects\JITterOptimisations\JITterOptimisations\Program.cs");
 
-                    PrintILToNativeOffsets(method, startAddress, lines);
+                    PrintILToNativeOffsetAlternative(method, lines);
+
+                    // This doesn't seem to work as expected, using alternative method (above)
+                    //PrintILToNativeOffsets(method, startAddress, lines);
 
                     // This is what we expect it to be
                     //--- c:\Users\warma11\Documents\Visual Studio 2013\Projects\JITterOptimisations\JITterOptimisations\Program.cs 
@@ -129,6 +132,40 @@ namespace MachineCode
                 Console.WriteLine("Unhandled exception:");
                 Console.WriteLine(ex);
             }
+        }
+
+        private static void PrintILToNativeOffsetAlternative(ClrMethod method, string[] lines)
+        {
+            DesktopModule module = (DesktopModule) @method.Type.Module;
+            if (!module.IsPdbLoaded)
+            {
+                // Have to load the Pdb, if it's not already loaded!!
+                string val = module.TryDownloadPdb(null);
+                if (val != null)
+                    module.LoadPdb(val);
+            }
+
+            foreach (var location in module.GetSourceLocationsForMethod(@method.MetadataToken))
+            {
+                ILOffsetSourceLocation ILLocation = location;
+                var ilMaps = @method.ILOffsetMap.Where(il => il.ILOffset == ILLocation.ILOffset);
+                Console.WriteLine("{0:X8} -> {1}:{2}",
+                                  location.ILOffset,
+                                  Path.GetFileName(location.SourceLocation.FilePath),
+                                  location.SourceLocation.LineNumber);
+                Console.WriteLine("  " + String.Join("\n  ",
+                                                     ilMaps.Select(
+                                                         ilMap =>
+                                                         String.Format("[{0:X8}-{1:X8} ({2:X8}-{3:X8})] ILOffset: {4:X2}",
+                                                                       ilMap.StartAddress - @method.NativeCode,
+                                                                       ilMap.EndAddress - @method.NativeCode,
+                                                                       ilMap.StartAddress, ilMap.EndAddress, ilMap.ILOffset))));
+                var indent = 7;
+                Console.WriteLine("{0,6}:{1}", location.SourceLocation.LineNumber, lines[location.SourceLocation.LineNumber - 1]);
+                Console.WriteLine(new string(' ', location.SourceLocation.ColStart - 1 + indent) +
+                                  new string('*', location.SourceLocation.ColEnd - location.SourceLocation.ColStart));
+            }
+            Console.WriteLine();
         }
 
         private static void PrintILToNativeOffsets(ClrMethod method, ulong startAddress, string[] lines)

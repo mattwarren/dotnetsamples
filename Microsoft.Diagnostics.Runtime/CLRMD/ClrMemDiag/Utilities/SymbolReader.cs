@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel; // For Win32Excption;
 using System.Diagnostics;
@@ -1128,7 +1129,6 @@ namespace Microsoft.Diagnostics.Runtime.Utilities
             }
         }
 
-
         /// <summary>
         /// Finds a (method) symbolic name for a given relative virtual address of some code.  
         /// Returns an empty string if a name could not be found. 
@@ -1158,7 +1158,7 @@ namespace Microsoft.Diagnostics.Runtime.Utilities
             // TODO FIX NOW, should not need to do this hand-unmangling.
             if (ret.Contains("@"))
             {
-                // TODO relativel inefficient.  
+                // TODO relatively inefficient.  
                 string unmangled = null;
                 symbol.get_undecoratedNameEx(0x1000, out unmangled);
                 if (unmangled != null)
@@ -1209,6 +1209,7 @@ namespace Microsoft.Diagnostics.Runtime.Utilities
             var sourceLocation = new SourceLocation(sourceLoc);
             return sourceLocation;
         }
+
         /// <summary>
         /// Managed code is shipped as IL, so RVA to NATIVE mapping can't be placed in the PDB. Instead
         /// what is placed in the PDB is a mapping from a method's meta-data token and IL offset to source
@@ -1270,12 +1271,45 @@ namespace Microsoft.Diagnostics.Runtime.Utilities
             var sourceLocation = new SourceLocation(sourceLoc);
             return sourceLocation;
         }
+
+        /// <summary>
+        /// Get the full list of SourceLocations (with corresponding ILOffset) for the given method
+        /// Based on the commented out code from "SourceLocationForManagedCode(uint methodMetaDataToken, int ilOffset)"
+        /// </summary>
+        public IList<ILOffsetSourceLocation> SourceLocationsForMethod(uint methodMetaDataToken)
+        {
+            //m_reader.m_log.WriteLine("SourceLocationForManagedCode: Looking up method token {0:x}", methodMetaDataToken);
+
+            IDiaSymbol methodSym;
+            m_session.findSymbolByToken(methodMetaDataToken, SymTagEnum.SymTagFunction, out methodSym);
+            if (methodSym == null)
+            {
+                m_reader.m_log.WriteLine("SourceLocationForManagedCode: No symbol for token {0:x}", methodMetaDataToken);
+                return null;
+            }
+
+            IDiaEnumLineNumbers sourceLocs;
+            IList<ILOffsetSourceLocation> sourceLocations = new List<ILOffsetSourceLocation>();
+            m_session.findLinesByRVA(methodSym.relativeVirtualAddress, 256, out sourceLocs);
+            for (int i = 0; ; i++)
+            {
+                IDiaLineNumber sourceLoc;
+                uint fetchCount;
+                sourceLocs.Next(1, out sourceLoc, out fetchCount);
+                if (fetchCount == 0)
+                    break;
+                uint ilOffset = sourceLoc.relativeVirtualAddress - methodSym.relativeVirtualAddress;
+                sourceLocations.Add(new ILOffsetSourceLocation(ilOffset, new SourceLocation(sourceLoc)));
+            }
+
+            return sourceLocations;
+        }
+
         /// <summary>
         /// Returns a list of all source files referenced in the PDB
         /// </summary>
         public IEnumerable<SourceFile> AllSourceFiles()
         {
-
             IDiaEnumTables tables;
             m_session.getEnumTables(out tables);
 
@@ -1308,6 +1342,7 @@ namespace Microsoft.Diagnostics.Runtime.Utilities
         /// The a unique identifier that is used to relate the DLL and its PDB.   
         /// </summary>
         public Guid PdbGuid { get { return m_session.globalScope.guid; } }
+
         /// <summary>
         /// Along with the PdbGuid, there is a small integer 
         /// call the age is also used to find the PDB (it represents the differnet 

@@ -1,20 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Text.RegularExpressions;
 using Address = System.UInt64;
-using System.Text;
-using System.Collections;
 using System.IO;
-using System.Reflection;
-using Microsoft.Diagnostics.Runtime;
 using System.Runtime.InteropServices;
 using Microsoft.Diagnostics.Runtime.Utilities;
 using Dia2Lib;
 
 namespace Microsoft.Diagnostics.Runtime.Desktop
 {
-    abstract class DesktopBaseModule : ClrModule
+    public abstract class DesktopBaseModule : ClrModule
     {
         internal abstract Address GetDomainModule(ClrAppDomain appDomain);
 
@@ -28,7 +23,7 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
         public int Revision { get; set; }
     }
 
-    class DesktopModule : DesktopBaseModule
+    public class DesktopModule : DesktopBaseModule
     {
         bool m_reflection, m_isPE;
         string m_name, m_assemblyName;
@@ -44,7 +39,6 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
         private bool m_typesLoaded;
         SymbolModule m_symbols;
         PEFile m_peFile;
-
 
         public override SourceLocation GetSourceInformation(ClrMethod method, int ilOffset)
         {
@@ -63,6 +57,14 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
                 return null;
 
             return m_symbols.SourceLocationForManagedCode(token, ilOffset);
+        }
+
+        public IList<ILOffsetSourceLocation> GetSourceLocationsForMethod(uint token)
+        {
+            if (m_symbols == null)
+                return null;
+
+            return m_symbols.SourceLocationsForMethod(token);
         }
 
         public override bool IsPdbLoaded { get { return m_symbols != null; } }
@@ -89,7 +91,6 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
         {
             m_symbols = new SymbolModule(m_runtime.DataTarget.SymbolReader, path);
         }
-
 
         public override object PdbInterface
         {
@@ -124,8 +125,7 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
             return reader.FindSymbolFilePath(pdbName, pdbGuid, rev, notification);
         }
 
-
-        public DesktopModule(DesktopRuntimeBase runtime, ulong address, IModuleData data, string name, string assemblyName, ulong size)
+        internal DesktopModule(DesktopRuntimeBase runtime, ulong address, IModuleData data, string name, string assemblyName, ulong size)
         {
             Revision = runtime.Revision;
             m_imageBase = data.ImageBase;
@@ -176,8 +176,6 @@ namespace Microsoft.Diagnostics.Runtime.Desktop
 
                 m_typesLoaded = true;
             }
-
-            
         }
 
         public override string AssemblyName
