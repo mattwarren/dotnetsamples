@@ -11,8 +11,21 @@ namespace MachineCode
         public uint Address { get; set; }
         public string RawData { get; set; }
         public string Text { get; set; }
+        public string Instruction { get; set; }
+        public string Parameters { get; set; }
 
         public override string ToString()
+        {
+            // Print the output how VS does
+            //00000000  push        ebp 
+            //00000001  mov         ebp,esp 
+            //00000003  push        edi 
+            if (Instruction == null || Parameters == null)
+                return String.Format("{0:X8}  {1}{2}", Address, RawData.PadRight(18), Text);
+            return String.Format("{0:X8}  {1}{2}", Address, Instruction.PadRight(12), Parameters);
+        }
+
+        public string ToNasmString()
         {
             //00000000  55                push ebp
             //00000001  8BEC              mov ebp,esp
@@ -109,7 +122,22 @@ namespace MachineCode
                 //if (rawData == "53")
                 //    text = "push blah";
 
-                var newData = new AssemblyLine { Address = address, RawData = rawData, Text = text };
+                String instruction = null, parameters = null;
+                var firstSpace = text.IndexOf(' ');
+                if (firstSpace != -1)
+                {
+                    instruction = text.Substring(0, firstSpace);
+                    parameters = text.Substring(firstSpace, text.Length - firstSpace);
+                }
+
+                var newData = new AssemblyLine
+                    {
+                        Address = address,
+                        RawData = rawData,
+                        Text = text,
+                        Instruction = instruction,
+                        Parameters = parameters
+                    };
                 Console.WriteLine(newData);
                 assemblyData.Add(newData);
             }
@@ -118,7 +146,7 @@ namespace MachineCode
             foreach (var line in disassemblyLines)
             {
                 var other = assemblyData[lineNum];
-                if (other.ToString() != line)
+                if (other.ToNasmString() != line)
                     Console.WriteLine("Error on line {0}\nExpected:{1}\n     Got:{2}", lineNum, line, other.ToString());
                 lineNum++;
             }
